@@ -33,22 +33,26 @@ jobs:
       - name: Comment on PR if deploy fails
         if: failure() && steps.get_pr.outputs.pr != ''
         uses: actions/github-script@v7
+        env:
+          PR_NUMBER: ${{ steps.get_pr.outputs.pr }}
         with:
           script: |
             github.rest.issues.createComment({
               owner: context.repo.owner,
               repo: context.repo.repo,
-              issue_number: steps.get_pr.outputs.pr,
+              issue_number: process.env.PR_NUMBER,
               body: '🚨 Deploy failed for this PR after merge to main.'
             })
       - name: Comment on PR if deploy succeeds
         if: success() && steps.get_pr.outputs.pr != ''
         uses: actions/github-script@v7
+        env:
+          PR_NUMBER: ${{ steps.get_pr.outputs.pr }}
         with:
           script: |
             github.rest.issues.createComment({
               owner: context.repo.owner,
               repo: context.repo.repo,
-              issue_number: steps.get_pr.outputs.pr,
+              issue_number: process.env.PR_NUMBER,
               body: '✅ Deploy succeeded for this PR after merge to main.'
             })
