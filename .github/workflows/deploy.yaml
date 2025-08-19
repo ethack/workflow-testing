@@ -3,16 +3,50 @@ name: deploy
 on:
   push:
     branches: [ main ]
+  pull_request:
+    types: [closed]
+    branches: [ main ]
 
 permissions:
   contents: write
 
 jobs:
-  build:
+  deploy:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
-    environment: production
     steps:
       - uses: actions/checkout@v3
-      - run: echo "Deploying to production environment"
-      - run: exit 1 # Simulating a failure to test the workflow
-
+      - name: Deploy step
+        run: echo "Deploying to production environment"
+      - name: Get associated PR number
+        id: get_pr
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const result = await github.request('GET /repos/{owner}/{repo}/commits/{commit_sha}/pulls', {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              commit_sha: context.sha,
+              mediaType: {
+                previews: ['groot']
+              }
+            });
+            if (result.data.length > 0) {
+              core.setOutput('pr', result.data[0].number);
+            } else {
+              core.setOutput('pr', '');
+            }
+      - name: Comment on PR if deploy fails
+        if: failure() && steps.get_pr.outputs.pr != ''
+        uses: peter-evans/create-or-update-comment@v4
+        with:
+          issue-number: ${{ steps.get_pr.outputs.pr }}
+          body: |
+            🚨 Deploy failed for this PR after merge to main.
+      - name: Comment on PR if deploy succeeds
+        if: success() && steps.get_pr.outputs.pr != ''
+        uses: peter-evans/create-or-update-comment@v4
+        with:
+          issue-number: ${{ steps.get_pr.outputs.pr }}
+          body: |
+            ✅ Deploy succeeded for this PR after merge to main.
