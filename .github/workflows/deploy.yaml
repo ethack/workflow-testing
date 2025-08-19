@@ -3,16 +3,47 @@ name: deploy
 on:
   push:
     branches: [ main ]
+  pull_request:
+    types: [closed]
+    branches: [ main ]
 
 permissions:
   contents: write
 
 jobs:
-  build:
+  deploy:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
-    environment: production
     steps:
       - uses: actions/checkout@v3
-      - run: echo "Deploying to production environment"
-      - run: exit 1 # Simulating a failure to test the workflow
+      - name: Deploy step
+        run: echo "Deploying to production environment"
+
+  pr-check:
+    if: github.event.pull_request.merged == true && github.event.pull_request.base.ref == 'main'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Create PR check (in progress)
+        uses: LouisBrunner/checks-action@v2.0.0
+        id: create_check
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          name: Deploy Workflow
+          status: in_progress
+          output: |
+            title: Deploy Workflow
+            summary: Build started.
+            text: The deploy workflow build is in progress.
+      - name: Update PR check (final status)
+        if: always()
+        uses: LouisBrunner/checks-action@v2.0.0
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          name: Deploy Workflow
+          status: completed
+          conclusion: ${{ job.status == 'success' && 'success' || 'failure' }}
+          output: |
+            title: Deploy Workflow
+            summary: Build ${{ job.status }}.
+            text: The deploy workflow build has completed with status: ${{ job.status }}.
 
