@@ -18,32 +18,35 @@ jobs:
       - uses: actions/checkout@v3
       - name: Deploy step
         run: echo "Deploying to production environment"
-
-  pr-check:
-    if: github.event.pull_request.merged == true && github.event.pull_request.base.ref == 'main'
-    runs-on: ubuntu-latest
-    steps:
-      - name: Create PR check (in progress)
-        uses: LouisBrunner/checks-action@v2.0.0
-        id: create_check
+      - name: Get associated PR number
+        id: get_pr
+        uses: actions/github-script@v7
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          name: Deploy Workflow
-          status: in_progress
-          output: |
-            title: Deploy Workflow
-            summary: Build started.
-            text: The deploy workflow build is in progress.
-      - name: Update PR check (final status)
-        if: always()
-        uses: LouisBrunner/checks-action@v2.0.0
+          script: |
+            const result = await github.request('GET /repos/{owner}/{repo}/commits/{commit_sha}/pulls', {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              commit_sha: context.sha,
+              mediaType: {
+                previews: ['groot']
+              }
+            });
+            if (result.data.length > 0) {
+              core.setOutput('pr', result.data[0].number);
+            } else {
+              core.setOutput('pr', '');
+            }
+      - name: Comment on PR if deploy fails
+        if: failure() && steps.get_pr.outputs.pr != ''
+        uses: peter-evans/create-or-update-comment@v4
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          name: Deploy Workflow
-          status: completed
-          conclusion: ${{ job.status == 'success' && 'success' || 'failure' }}
-          output: |
-            title: Deploy Workflow
-            summary: Build ${{ job.status }}.
-            text: The deploy workflow build has completed with status: ${{ job.status }}.
-
+          issue-number: ${{ steps.get_pr.outputs.pr }}
+          body: |
+            🚨 Deploy failed for this PR after merge to main.
+      - name: Comment on PR if deploy succeeds
+        if: success() && steps.get_pr.outputs.pr != ''
+        uses: peter-evans/create-or-update-comment@v4
+        with:
+          issue-number: ${{ steps.get_pr.outputs.pr }}
+          body: |
+            ✅ Deploy succeeded for this PR after merge to main.
